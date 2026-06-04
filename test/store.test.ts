@@ -20,15 +20,15 @@ describe("store", () => {
   });
 
   it("persists new products and reads them back", async () => {
-    await persist(env.DB, [p("u7", 6899)], "2026-06-03T00:00:00Z");
+    await persist(env.DB, [p("u7", 6899)], await getLatestPrices(env.DB), "2026-06-03T00:00:00Z");
     const map = await getLatestPrices(env.DB);
     expect(map.get("u7")?.currentPrice).toBe(6899);
   });
 
   it("writes a history row only when price changes", async () => {
-    await persist(env.DB, [p("u7", 6899)], "2026-06-03T00:00:00Z");
-    await persist(env.DB, [p("u7", 6899)], "2026-06-03T06:00:00Z"); // unchanged
-    await persist(env.DB, [p("u7", 5999)], "2026-06-03T12:00:00Z"); // changed
+    await persist(env.DB, [p("u7", 6899)], await getLatestPrices(env.DB), "2026-06-03T00:00:00Z");
+    await persist(env.DB, [p("u7", 6899)], await getLatestPrices(env.DB), "2026-06-03T06:00:00Z"); // unchanged
+    await persist(env.DB, [p("u7", 5999)], await getLatestPrices(env.DB), "2026-06-03T12:00:00Z"); // changed
     const { results } = await env.DB.prepare(
       "SELECT price FROM price_history WHERE sku = ? ORDER BY observed_at",
     ).bind("u7").all<{ price: number }>();

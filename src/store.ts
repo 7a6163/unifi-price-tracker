@@ -28,11 +28,15 @@ export async function getLatestPrices(db: D1Database): Promise<Map<string, Produ
   return map;
 }
 
-export async function persist(db: D1Database, scraped: ScrapedProduct[], now: string): Promise<void> {
-  const prev = await getLatestPrices(db);
+export async function persist(
+  db: D1Database,
+  scraped: ScrapedProduct[],
+  previous: Map<string, Product>,
+  now: string,
+): Promise<void> {
   const statements: D1PreparedStatement[] = [];
   for (const item of scraped) {
-    const prior = prev.get(item.sku);
+    const prior = previous.get(item.sku);
     const changed = !prior || prior.currentPrice !== item.price;
     // products upsert first (satisfies FK), then history if changed.
     statements.push(

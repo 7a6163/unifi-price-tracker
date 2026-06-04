@@ -1,7 +1,11 @@
 import type { Changes, Env } from "./types";
 
 function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function nt(price: number): string {
@@ -22,6 +26,11 @@ export function formatMessage(changes: Changes, when: string): string {
   return lines.join("\n");
 }
 
+/**
+ * Send a message via the Telegram Bot API. Retries once on a non-2xx response,
+ * then throws so the caller can log the delivery failure (it must not be silent).
+ * `message` passed to sendAdminAlert must be plain text — it is HTML-escaped here.
+ */
 async function send(env: Env, text: string): Promise<void> {
   const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
   const body = JSON.stringify({
@@ -32,9 +41,10 @@ async function send(env: Env, text: string): Promise<void> {
   });
   const opts = { method: "POST", headers: { "content-type": "application/json" }, body };
   const res = await fetch(url, opts);
-  if (!res.ok) {
-    const retry = await fetch(url, opts); // retry once
-    if (!retry.ok) console.error(`Telegram send failed: ${retry.status} ${await retry.text()}`);
+  if (res.ok) return;
+  const retry = await fetch(url, opts); // retry once
+  if (!retry.ok) {
+    throw new Error(`Telegram send failed (${retry.status}): ${await retry.text()}`);
   }
 }
 

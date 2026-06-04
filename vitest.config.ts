@@ -8,6 +8,7 @@ export default defineWorkersConfig({
           compatibilityDate: "2024-09-23",
           compatibilityFlags: ["nodejs_compat"],
           d1Databases: ["DB"],
+          bindings: { STORE_BASE: "https://tw.store.ui.com" },
         },
       },
     },

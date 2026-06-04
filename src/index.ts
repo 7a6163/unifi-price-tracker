@@ -1,6 +1,6 @@
 import type { Changes, Env, ScrapedProduct } from "./types";
 import { scrapeAll } from "./scraper";
-import { getLatestPrices, persist } from "./store";
+import { applySchema, getLatestPrices, persist } from "./store";
 import { detectChanges } from "./detector";
 import { notify as tgNotify, sendAdminAlert } from "./telegram";
 
@@ -20,13 +20,25 @@ function taipeiStamp(iso: string): string {
   }).format(d).replace("T", " ");
 }
 
+// Telegram delivery must never abort the scheduled run; log and continue.
+async function safeAlert(deps: Deps, env: Env, message: string): Promise<void> {
+  try {
+    await deps.adminAlert(env, message);
+  } catch (err) {
+    console.error("admin alert failed:", err instanceof Error ? err.message : String(err));
+  }
+}
+
 export async function runOnce(env: Env, nowIso: string, deps: Deps = DEFAULT_DEPS): Promise<void> {
+  if (!env.STORE_BASE) throw new Error("STORE_BASE not configured");
+  await applySchema(env.DB); // idempotent; avoids a confusing first-run crash if schema not applied
+
   const { products, failures } = await deps.scrape(env);
   for (const f of failures) console.error("scrape failure:", f);
 
   // Scraped nothing at all -> alert and bail (do NOT treat as "everything delisted").
   if (products.length === 0) {
-    await deps.adminAlert(env, `抓取失敗，無任何商品。失敗清單：${failures.join("; ")}`);
+    await safeAlert(deps, env, `抓取失敗，無任何商品。失敗清單：${failures.join("; ")}`);
     return;
   }
 
@@ -35,21 +47,25 @@ export async function runOnce(env: Env, nowIso: string, deps: Deps = DEFAULT_DEP
 
   // Guard against a partial scrape causing a false "new item" / drop flood.
   if (knownCount > 0 && products.length < knownCount * 0.5) {
-    await deps.adminAlert(env, `本次抓到 ${products.length} 件，遠少於已知 ${knownCount} 件，疑似改版/部分失敗，略過本批通知。`);
-    await persist(env.DB, products, nowIso); // still record what we saw
+    await persist(env.DB, products, previous, nowIso); // record what we saw
+    await safeAlert(deps, env, `本次抓到 ${products.length} 件，遠少於已知 ${knownCount} 件，疑似改版/部分失敗，已記錄價格但略過本批通知。`);
     return;
   }
 
   const changes = detectChanges(products, previous);
-  await persist(env.DB, products, nowIso);
+  await persist(env.DB, products, previous, nowIso);
 
   // First-ever run (empty DB): every product is "new" — seed silently, don't spam.
   if (knownCount === 0) return;
 
-  await deps.notify(env, changes, taipeiStamp(nowIso));
+  try {
+    await deps.notify(env, changes, taipeiStamp(nowIso));
+  } catch (err) {
+    console.error("notify failed:", err instanceof Error ? err.message : String(err));
+  }
 
   if (failures.length > 0) {
-    await deps.adminAlert(env, `部分分類抓取失敗：${failures.join("; ")}`);
+    await safeAlert(deps, env, `部分分類抓取失敗：${failures.join("; ")}`);
   }
 }
 
