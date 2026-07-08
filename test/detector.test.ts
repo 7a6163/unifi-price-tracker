@@ -36,4 +36,15 @@ describe("detectChanges", () => {
     expect(drops).toEqual([]);
     expect(newItems).toEqual([]);
   });
+
+  it("deduplicates scraped items with the same sku", () => {
+    // If scrapeAll doesn't dedup, same SKU could appear twice as a new item.
+    const { drops, newItems } = detectChanges(
+      [scraped("door-closer", 4999), scraped("door-closer", 4999)],
+      new Map(),
+    );
+    expect(drops).toEqual([]);
+    // Should report only one new item, not two.
+    expect(newItems).toHaveLength(1);
+  });
 });

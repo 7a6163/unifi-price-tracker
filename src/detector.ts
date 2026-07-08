@@ -6,8 +6,11 @@ export function detectChanges(
 ): Changes {
   const drops: Changes["drops"] = [];
   const newItems: ScrapedProduct[] = [];
+  const seen = new Set<string>();
 
   for (const item of scraped) {
+    if (seen.has(item.sku)) continue;
+    seen.add(item.sku);
     const prior = previous.get(item.sku);
     if (!prior) {
       newItems.push(item);

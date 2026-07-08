@@ -77,7 +77,7 @@ export function parseCategory(html: string, category: string, base: string): Scr
 }
 
 export async function scrapeAll(env: Env): Promise<{ products: ScrapedProduct[]; failures: string[] }> {
-  const products: ScrapedProduct[] = [];
+  const all: ScrapedProduct[] = [];
   const failures: string[] = [];
   for (const cat of CATEGORIES) {
     try {
@@ -94,10 +94,18 @@ export async function scrapeAll(env: Env): Promise<{ products: ScrapedProduct[];
         failures.push(`${cat}: parsed 0 products (possible layout change)`);
         continue;
       }
-      products.push(...parsed);
+      all.push(...parsed);
     } catch (err) {
       failures.push(`${cat}: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+  // Deduplicate across categories — same product can appear in multiple category pages.
+  const products: ScrapedProduct[] = [];
+  const seen = new Set<string>();
+  for (const p of all) {
+    if (seen.has(p.sku)) continue;
+    seen.add(p.sku);
+    products.push(p);
   }
   return { products, failures };
 }
